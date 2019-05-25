@@ -1,18 +1,46 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
-#include <Arduino_FreeRTOS.h>
 
-// Sensor data wire in pin 2
-#define ONE_WIRE_BUS    2
-#define BAUD_RATE       9600
+#define BAUD_RATE               9600
 
-#define LED_TANK_ERROR  12
+#define ONE_WIRE_BUS            2   // Sensor data wire in pin 2
+#define TEMPERATURE_PRECISION   12  // 12 bits precision
+#define LED_TANK_ERROR          12  
 
 // OneWire initialization
 OneWire oneWire(ONE_WIRE_BUS);
 
 // Initialize Dallas with reference to OneWire
 DallasTemperature sensors(&oneWire);
+
+// Address for tank sensor
+DeviceAddress tankSensor;
+
+bool ERROR_STATE;
+
+void setup() 
+{
+  setupErrorLED();
+  setupLibraries();
+  setupSensor();
+}
+
+void loop() 
+{
+  if (ERROR_STATE)
+  {
+    Serial.println("SENSOR DISCONNECTED");
+    delay(1000);
+    
+    setupSensor();
+    return;
+  }
+  
+  sensors.requestTemperatures();
+  processTankSensor();
+
+  delay(1000);
+}
 
 void setupLibraries()
 {
@@ -23,21 +51,56 @@ void setupLibraries()
   sensors.begin();
 }
 
-void setup() 
+void setupErrorLED()
 {
-  setupLibraries();
-
   pinMode(LED_TANK_ERROR, OUTPUT);
-  digitalWrite(LED_TANK_ERROR, LOW);
+  
+  ERROR_STATE = LOW;
+  setErrorLED();
 }
 
-void loop() 
+void setupSensor()
 {
-  sensors.requestTemperatures();
+  if (sensors.getAddress(tankSensor, 0))
+  {
+    sensors.setResolution(tankSensor, TEMPERATURE_PRECISION);
+    ERROR_STATE = LOW;
+  }
+  else
+  {
+    ERROR_STATE = HIGH;
+  }
+  
+  setErrorLED();
+}
 
-  Serial.print("Temperature: ");
-  Serial.println(sensors.getTempFByIndex(0));
+void setErrorLED()
+{
+  digitalWrite(LED_TANK_ERROR, ERROR_STATE);
+}
 
-  delay(1000);
+void processTankSensor()
+{
+  float tempF = sensors.getTempF(tankSensor);
+
+  if (tempF == DEVICE_DISCONNECTED_F)
+  {
+    ERROR_STATE = HIGH;
+    setErrorLED();
+  }
+  else 
+  {
+    outputTemperature('f', tempF);
+    Serial.print(", ");
+    outputTemperature('c', DallasTemperature::toCelsius(tempF));
+    Serial.println();
+  }
+}
+
+void outputTemperature(char measurement, float temp)
+{
+  Serial.print(measurement);
+  Serial.print(": ");
+  Serial.print(temp);
 }
 
