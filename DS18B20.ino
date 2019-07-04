@@ -2,10 +2,12 @@
 #include <DallasTemperature.h>
 
 #define BAUD_RATE               9600
-
-#define ONE_WIRE_BUS            2   // Sensor data wire in pin 2
 #define TEMPERATURE_PRECISION   12  // 12 bits precision
-#define LED_TANK_ERROR          12  
+#define TEMPERATRE_ERROR        185
+
+// Pin locations
+#define ONE_WIRE_BUS            2   // Sensor data wire in pin 2
+#define LED_SENSOR_ERROR        12  // Pin 12 for error LED
 
 // OneWire initialization
 OneWire oneWire(ONE_WIRE_BUS);
@@ -29,15 +31,12 @@ void loop()
 {
   if (ERROR_STATE)
   {
-    Serial.println("SENSOR DISCONNECTED");
-    delay(1000);
-    
     setupSensor();
-    return;
   }
-  
-  sensors.requestTemperatures();
-  processTankSensor();
+  else 
+  {
+    processSensor(); 
+  }
 
   delay(1000);
 }
@@ -53,7 +52,7 @@ void setupLibraries()
 
 void setupErrorLED()
 {
-  pinMode(LED_TANK_ERROR, OUTPUT);
+  pinMode(LED_SENSOR_ERROR, OUTPUT);
   
   ERROR_STATE = LOW;
   setErrorLED();
@@ -68,39 +67,47 @@ void setupSensor()
   }
   else
   {
+    Serial.println("SENSOR NOT FOUND");
     ERROR_STATE = HIGH;
   }
-  
-  setErrorLED();
 }
 
 void setErrorLED()
 {
-  digitalWrite(LED_TANK_ERROR, ERROR_STATE);
+  digitalWrite(LED_SENSOR_ERROR, ERROR_STATE);
 }
 
-void processTankSensor()
+void processSensor()
 {
+  sensors.requestTemperatures();
+  
   float tempF = sensors.getTempF(tankSensor);
 
-  if (tempF == DEVICE_DISCONNECTED_F)
+  if (tempF == DEVICE_DISCONNECTED_F || tempF == TEMPERATRE_ERROR)
   {
     ERROR_STATE = HIGH;
-    setErrorLED();
+
+    Serial.println("SENSOR READ ERROR");
   }
   else 
   {
-    outputTemperature('f', tempF);
-    Serial.print(", ");
-    outputTemperature('c', DallasTemperature::toCelsius(tempF));
-    Serial.println();
+    ERROR_STATE = LOW;
+    
+    outputTemperature(tempF);
   }
+
+  setErrorLED();
 }
 
-void outputTemperature(char measurement, float temp)
+void outputTemperature(float tempF)
 {
-  Serial.print(measurement);
-  Serial.print(": ");
-  Serial.print(temp);
-}
+  // Print Fahrenheit
+  Serial.print("f: ");
+  Serial.print(tempF);
+  Serial.print(", ");
 
+  // Print Celsius
+  Serial.print("c: ");
+  Serial.print(DallasTemperature::toCelsius(tempF));
+  Serial.println();
+}
